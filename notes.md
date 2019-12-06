@@ -16,6 +16,12 @@
 * `python setup.py install`
 * This will install pycoco to the virtualenv
 
+### Testing the setup: Running Coco evaluation in samples
+
+The following assumes you have already downloaded the 2017 validation image and annotation sets into the `/CodeForLyf/_Datasets/coco` folder.
+
+`python3 coco.py evaluate --dataset "/CodeForLyf/_Datasets/coco" --year 2017 --model "/CodeForLyf/Mask_RCNN/mask_rcnn_coco.h5" --limit 10`
+
 
 ### Detection Response
 The detection returns the following dict for each image.
