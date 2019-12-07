@@ -55,6 +55,9 @@ sys.path.append(ROOT_DIR)  # To find local version of the library
 from mrcnn.config import Config
 from mrcnn import model as modellib, utils
 
+# Import custom written utilities
+from deepfashion2_to_coco import convert_deepfashion2_annotations_to_coco_format
+
 # Path to trained weights file
 COCO_MODEL_PATH = os.path.join(ROOT_DIR, "mask_rcnn_coco.h5")
 
@@ -90,44 +93,55 @@ class CocoConfig(Config):
 ############################################################
 #  Dataset
 ############################################################
-
-class CocoDataset(utils.Dataset):
-    def load_deepfashion2(self, dataset_dir, subset):
-        """Load deepfashion2 data
+class BluDataset(utils.Dataset):
+    def load_deepfashion2(self, dataset_dir, subset, return_coco=True):
+        """Load a subset of the deepfashion2 data
+        dataset_dir: The root directory of the deepfashion2 dataset.
+        subset: What to load (train, validation)
+        return_coco: If True, returns the COCO object.
         """
 
+        temp_json_annotations_output = "temp/deepfashion_annotations.json"
+        
         # First transform the annotations from deepfashion to COCO format and drop it in a file
-        coco_annot = {
-            "info": {
-                "description": "DeepFashion Dataset",
-                "url": "https://bluprint.shop",
-                "version": "2.0",
-                "year": 2017,
-                "contributor": "DeepFashion",
-                "date_created": "2019/12/01"
-            },
-            "licenses": [
-                {
-                    "url": "http://creativecommons.org/licenses/by-nc-sa/2.0/",
-                    "id": 1,
-                    "name": "Attribution-NonCommercial-ShareAlike License"
-                },
-                {
-                    "url": "http://creativecommons.org/licenses/by-nc/2.0/",
-                    "id": 2,
-                    "name": "Attribution-NonCommercial License"
-                }
-            ],
-            "categories": [
-
-            ]
-        }
-
-        return coco_annot
+        if not convert_deepfashion2_annotations_to_coco_format(dataset_dir, subset, temp_json_annotations_output):
+            raise Exception("Deepfashion annotations could not be converted to coco-style")
 
         # Then initialize COCO with the coco-style annotation file
+        deepfashion = COCO(temp_json_annotations_output)
+        image_dir = "{}/{}/image".format(dataset_dir, subset)
 
+        # Load all classes (or a subset if you can filter train/test per category at some point)
+        class_ids = sorted(deepfashion.getCatIds())
 
+        # Load all images or a subset?
+        if class_ids:
+            image_ids = []
+            for id in class_ids:
+                image_ids.extend(list(deepfashion.getImgIds(catIds=[id])))
+            # Remove duplicates
+            image_ids = list(set(image_ids))
+        else:
+            # All images
+            image_ids = list(deepfashion.imgs.keys())
+
+        # Add classes
+        for i in class_ids:
+            self.add_class("deepfashion", i, deepfashion.loadCats(i)[0]["name"])
+
+        # Add images
+        for i in image_ids:
+            self.add_image(
+                "deepfashion", image_id=i,
+                path=os.path.join(image_dir, deepfashion.imgs[i]['file_name']),
+                width=deepfashion.imgs[i]["width"],
+                height=deepfashion.imgs[i]["height"],
+                annotations=deepfashion.loadAnns(deepfashion.getAnnIds(
+                    imgIds=[i], catIds=class_ids, iscrowd=None)))
+        if return_coco:
+            return deepfashion
+
+class CocoDataset(utils.Dataset):
 
     def load_coco(self, dataset_dir, subset, year=DEFAULT_DATASET_YEAR, class_ids=None,
                   class_map=None, return_coco=False, auto_download=False):
@@ -573,9 +587,13 @@ if __name__ == '__main__':
         print('**********************************************')
         print('Training on Deepfashion data')
 
-        dataset_train = CocoDataset()
-        response = dataset_train.load_deepfashion2(args.dataset, 'validation')
-        print(response)
+        dataset_train = BluDataset()
+        coco = dataset_train.load_deepfashion2(dataset_dir=args.dataset, subset='validation', return_coco=True)
+        """
+        dataset_train.prepare()
+        print("Running DeepFashion evaluation on {} images.".format(args.limit))
+        evaluate_coco(model, dataset_train, coco, "bbox", limit=int(args.limit))
+        """
     else:
         print("'{}' is not recognized. "
               "Use 'train' or 'evaluate'".format(args.command))
