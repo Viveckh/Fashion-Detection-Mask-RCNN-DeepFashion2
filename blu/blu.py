@@ -1,13 +1,15 @@
 """
-Mask R-CNN
-Configurations and data loading code for MS COCO.
+Model training and evaluation codebase for a Mask-RCNN Network on DeepFashion Dataset
+- Converts the deepfashion dataset and annotations to a coco-compatible format
 
-Copyright (c) 2017 Matterport, Inc.
-Licensed under the MIT License (see LICENSE for details)
-Written by Waleed Abdulla
+Written by (EJ) Vivek Pandey. Baseline by Abdulla Waleed
+www.github.com/Viveckh
 
 ------------------------------------------------------------
 
+TODO: Update Instructions
+
+python3 blu.py train --dataset "/CodeForLyf/_Datasets/deepfashion2" --model "/CodeForLyf/Mask_RCNN/mask_rcnn_coco.h5" --usecachedannot true --limit 10
 Usage: import the module (see Jupyter notebooks for examples), or run from
        the command line as such:
 
@@ -59,25 +61,27 @@ from mrcnn import model as modellib, utils
 from deepfashion2_to_coco import convert_deepfashion2_annotations_to_coco_format
 
 # Path to trained weights file
-COCO_MODEL_PATH = os.path.join(ROOT_DIR, "mask_rcnn_coco.h5")
+# Update the default model path
+DEEPFASHION_MODEL_PATH = os.path.join(ROOT_DIR, "mask_rcnn_coco.h5")
 
 # Directory to save logs and model checkpoints, if not provided
 # through the command line argument --logs
 DEFAULT_LOGS_DIR = os.path.join(ROOT_DIR, "logs")
 DEFAULT_DATASET_YEAR = "2014"
 
+
+# TODO: Typecast the functions
 ############################################################
 #  Configurations
 ############################################################
 
-
-class CocoConfig(Config):
-    """Configuration for training on MS COCO.
+class BluConfig(Config):
+    """Configuration for training on Blu Data
     Derives from the base Config class and overrides values specific
-    to the COCO dataset.
+    to the Blu dataset
     """
     # Give the configuration a recognizable name
-    NAME = "coco"
+    NAME = "blu"
 
     # We use a GPU with 12GB memory, which can fit two images.
     # Adjust down if you use a smaller GPU.
@@ -87,25 +91,30 @@ class CocoConfig(Config):
     # GPU_COUNT = 8
 
     # Number of classes (including background)
-    NUM_CLASSES = 1 + 80  # COCO has 80 classes
+    # Changing the following from COCO's 80 classes makes models trained on COCO unusable, due to dimension issues
+    NUM_CLASSES = 1 + 13  # The Deepfashion2 dataset being currently used has 13 classes
 
 
 ############################################################
 #  Dataset
 ############################################################
 class BluDataset(utils.Dataset):
-    def load_deepfashion2(self, dataset_dir, subset, return_coco=True):
+    def load_deepfashion2(self, dataset_dir, subset, use_cached_coco_annot=False, return_coco=True):
         """Load a subset of the deepfashion2 data
         dataset_dir: The root directory of the deepfashion2 dataset.
         subset: What to load (train, validation)
-        return_coco: If True, returns the COCO object.
+        use_cached_coco_annot: Use cached coco-style annotations previously generated
+        return_coco: If True, returns the COCO-style object.
         """
 
-        temp_json_annotations_output = "temp/deepfashion_annotations.json"
+        temp_json_annotations_output = "temp/deepfashion_{subset}_annotations.json".format(subset)
         
-        # First transform the annotations from deepfashion to COCO format and drop it in a file
-        if not convert_deepfashion2_annotations_to_coco_format(dataset_dir, subset, temp_json_annotations_output):
-            raise Exception("Deepfashion annotations could not be converted to coco-style")
+        if use_cached_coco_annot and os.path.isfile(temp_json_annotations_output):
+            pass
+        else:
+            # First transform the annotations from deepfashion to COCO format and drop it in a file
+            if not convert_deepfashion2_annotations_to_coco_format(dataset_dir, subset, temp_json_annotations_output):
+                raise Exception("Deepfashion annotations could not be converted to coco-style")
 
         # Then initialize COCO with the coco-style annotation file
         deepfashion = COCO(temp_json_annotations_output)
@@ -132,7 +141,7 @@ class BluDataset(utils.Dataset):
         # Add images
         for i in image_ids:
             self.add_image(
-                "deepfashion", image_id=i,
+                source="deepfashion", image_id=i,
                 path=os.path.join(image_dir, deepfashion.imgs[i]['file_name']),
                 width=deepfashion.imgs[i]["width"],
                 height=deepfashion.imgs[i]["height"],
@@ -141,132 +150,7 @@ class BluDataset(utils.Dataset):
         if return_coco:
             return deepfashion
 
-class CocoDataset(utils.Dataset):
-
-    def load_coco(self, dataset_dir, subset, year=DEFAULT_DATASET_YEAR, class_ids=None,
-                  class_map=None, return_coco=False, auto_download=False):
-        """Load a subset of the COCO dataset.
-        dataset_dir: The root directory of the COCO dataset.
-        subset: What to load (train, val, minival, valminusminival)
-        year: What dataset year to load (2014, 2017) as a string, not an integer
-        class_ids: If provided, only loads images that have the given classes.
-        class_map: TODO: Not implemented yet. Supports maping classes from
-            different datasets to the same class ID.
-        return_coco: If True, returns the COCO object.
-        auto_download: Automatically download and unzip MS-COCO images and annotations
-        """
-
-        if auto_download is True:
-            self.auto_download(dataset_dir, subset, year)
-
-        coco = COCO("{}/annotations/instances_{}{}.json".format(dataset_dir, subset, year))
-        if subset == "minival" or subset == "valminusminival":
-            subset = "val"
-        image_dir = "{}/{}{}".format(dataset_dir, subset, year)
-
-        # Load all classes or a subset?
-        if not class_ids:
-            # All classes
-            class_ids = sorted(coco.getCatIds())
-
-        # All images or a subset?
-        if class_ids:
-            image_ids = []
-            for id in class_ids:
-                image_ids.extend(list(coco.getImgIds(catIds=[id])))
-            # Remove duplicates
-            image_ids = list(set(image_ids))
-        else:
-            # All images
-            image_ids = list(coco.imgs.keys())
-
-        # Add classes
-        for i in class_ids:
-            self.add_class("coco", i, coco.loadCats(i)[0]["name"])
-
-        # Add images
-        for i in image_ids:
-            self.add_image(
-                "coco", image_id=i,
-                path=os.path.join(image_dir, coco.imgs[i]['file_name']),
-                width=coco.imgs[i]["width"],
-                height=coco.imgs[i]["height"],
-                annotations=coco.loadAnns(coco.getAnnIds(
-                    imgIds=[i], catIds=class_ids, iscrowd=None)))
-        if return_coco:
-            return coco
-
-    def auto_download(self, dataDir, dataType, dataYear):
-        """Download the COCO dataset/annotations if requested.
-        dataDir: The root directory of the COCO dataset.
-        dataType: What to load (train, val, minival, valminusminival)
-        dataYear: What dataset year to load (2014, 2017) as a string, not an integer
-        Note:
-            For 2014, use "train", "val", "minival", or "valminusminival"
-            For 2017, only "train" and "val" annotations are available
-        """
-
-        # Setup paths and file names
-        if dataType == "minival" or dataType == "valminusminival":
-            imgDir = "{}/{}{}".format(dataDir, "val", dataYear)
-            imgZipFile = "{}/{}{}.zip".format(dataDir, "val", dataYear)
-            imgURL = "http://images.cocodataset.org/zips/{}{}.zip".format("val", dataYear)
-        else:
-            imgDir = "{}/{}{}".format(dataDir, dataType, dataYear)
-            imgZipFile = "{}/{}{}.zip".format(dataDir, dataType, dataYear)
-            imgURL = "http://images.cocodataset.org/zips/{}{}.zip".format(dataType, dataYear)
-        # print("Image paths:"); print(imgDir); print(imgZipFile); print(imgURL)
-
-        # Create main folder if it doesn't exist yet
-        if not os.path.exists(dataDir):
-            os.makedirs(dataDir)
-
-        # Download images if not available locally
-        if not os.path.exists(imgDir):
-            os.makedirs(imgDir)
-            print("Downloading images to " + imgZipFile + " ...")
-            with urllib.request.urlopen(imgURL) as resp, open(imgZipFile, 'wb') as out:
-                shutil.copyfileobj(resp, out)
-            print("... done downloading.")
-            print("Unzipping " + imgZipFile)
-            with zipfile.ZipFile(imgZipFile, "r") as zip_ref:
-                zip_ref.extractall(dataDir)
-            print("... done unzipping")
-        print("Will use images in " + imgDir)
-
-        # Setup annotations data paths
-        annDir = "{}/annotations".format(dataDir)
-        if dataType == "minival":
-            annZipFile = "{}/instances_minival2014.json.zip".format(dataDir)
-            annFile = "{}/instances_minival2014.json".format(annDir)
-            annURL = "https://dl.dropboxusercontent.com/s/o43o90bna78omob/instances_minival2014.json.zip?dl=0"
-            unZipDir = annDir
-        elif dataType == "valminusminival":
-            annZipFile = "{}/instances_valminusminival2014.json.zip".format(dataDir)
-            annFile = "{}/instances_valminusminival2014.json".format(annDir)
-            annURL = "https://dl.dropboxusercontent.com/s/s3tw5zcg7395368/instances_valminusminival2014.json.zip?dl=0"
-            unZipDir = annDir
-        else:
-            annZipFile = "{}/annotations_trainval{}.zip".format(dataDir, dataYear)
-            annFile = "{}/instances_{}{}.json".format(annDir, dataType, dataYear)
-            annURL = "http://images.cocodataset.org/annotations/annotations_trainval{}.zip".format(dataYear)
-            unZipDir = dataDir
-        # print("Annotations paths:"); print(annDir); print(annFile); print(annZipFile); print(annURL)
-
-        # Download annotations if not available locally
-        if not os.path.exists(annDir):
-            os.makedirs(annDir)
-        if not os.path.exists(annFile):
-            if not os.path.exists(annZipFile):
-                print("Downloading zipped annotations to " + annZipFile + " ...")
-                with urllib.request.urlopen(annURL) as resp, open(annZipFile, 'wb') as out:
-                    shutil.copyfileobj(resp, out)
-                print("... done downloading.")
-            print("Unzipping " + annZipFile)
-            with zipfile.ZipFile(annZipFile, "r") as zip_ref:
-                zip_ref.extractall(unZipDir)
-            print("... done unzipping")
-        print("Will use annotations in " + annFile)
+    # TODO: Implement an auto-download feature in case the dataset isn't already in the system
 
     def load_mask(self, image_id):
         """Load instance masks for the given image.
@@ -280,10 +164,10 @@ class CocoDataset(utils.Dataset):
             one mask per instance.
         class_ids: a 1D array of class IDs of the instance masks.
         """
-        # If not a COCO image, delegate to parent class.
+        # If not a Deepfashion image, delegate to parent class.
         image_info = self.image_info[image_id]
-        if image_info["source"] != "coco":
-            return super(CocoDataset, self).load_mask(image_id)
+        if image_info["source"] != "deepfashion":
+            return super(BluDataset, self).load_mask(image_id)
 
         instance_masks = []
         class_ids = []
@@ -291,8 +175,9 @@ class CocoDataset(utils.Dataset):
         # Build mask of shape [height, width, instance_count] and list
         # of class IDs that correspond to each channel of the mask.
         for annotation in annotations:
+            # The map_source_class_id is created in the .prepare() function of parent Utils class which is not overwritten
             class_id = self.map_source_class_id(
-                "coco.{}".format(annotation['category_id']))
+                "deepfashion.{}".format(annotation['category_id']))
             if class_id:
                 m = self.annToMask(annotation, image_info["height"],
                                    image_info["width"])
@@ -318,18 +203,11 @@ class CocoDataset(utils.Dataset):
             return mask, class_ids
         else:
             # Call super class to return an empty mask
-            return super(CocoDataset, self).load_mask(image_id)
+            return super(BluDataset, self).load_mask(image_id)
 
-    def image_reference(self, image_id):
-        """Return a link to the image in the COCO Website."""
-        info = self.image_info[image_id]
-        if info["source"] == "coco":
-            return "http://cocodataset.org/#explore?id={}".format(info["id"])
-        else:
-            super(CocoDataset, self).image_reference(image_id)
-
+    
     # The following two functions are from pycocotools with a few changes.
-
+    
     def annToRLE(self, ann, height, width):
         """
         Convert annotation which can be polygons, uncompressed RLE to RLE.
@@ -358,12 +236,11 @@ class CocoDataset(utils.Dataset):
         m = maskUtils.decode(rle)
         return m
 
-
 ############################################################
-#  COCO Evaluation
+#  Deepfashion Evaluation
 ############################################################
 
-def build_coco_results(dataset, image_ids, rois, class_ids, scores, masks):
+def build_deepfashion_results(dataset, image_ids, rois, class_ids, scores, masks):
     """Arrange resutls to match COCO specs in http://cocodataset.org/#format
     """
     # If no results, return an empty list
@@ -381,7 +258,7 @@ def build_coco_results(dataset, image_ids, rois, class_ids, scores, masks):
 
             result = {
                 "image_id": image_id,
-                "category_id": dataset.get_source_class_id(class_id, "coco"),
+                "category_id": dataset.get_source_class_id(class_id=class_id, source="deepfashion"),
                 "bbox": [bbox[1], bbox[0], bbox[3] - bbox[1], bbox[2] - bbox[0]],
                 "score": score,
                 "segmentation": maskUtils.encode(np.asfortranarray(mask))
@@ -390,21 +267,21 @@ def build_coco_results(dataset, image_ids, rois, class_ids, scores, masks):
     return results
 
 
-def evaluate_coco(model, dataset, coco, eval_type="bbox", limit=0, image_ids=None):
-    """Runs official COCO evaluation.
-    dataset: A Dataset object with valiadtion data
+def evaluate_deepfashion(model, dataset, deepfashion, eval_type="bbox", limit=0, image_ids=None):
+    """Runs deepfashion evaluation.
+    dataset: A Dataset object with validation data
     eval_type: "bbox" or "segm" for bounding box or segmentation evaluation
     limit: if not 0, it's the number of images to use for evaluation
     """
-    # Pick COCO images from the dataset
+    # Pick deepfashion images from the dataset
     image_ids = image_ids or dataset.image_ids
 
     # Limit to a subset
     if limit:
         image_ids = image_ids[:limit]
 
-    # Get corresponding COCO image IDs.
-    coco_image_ids = [dataset.image_info[id]["id"] for id in image_ids]
+    # Get corresponding deepfashion image IDs.
+    deepfashion_image_ids = [dataset.image_info[id]["id"] for id in image_ids]
 
     t_prediction = 0
     t_start = time.time()
@@ -421,18 +298,18 @@ def evaluate_coco(model, dataset, coco, eval_type="bbox", limit=0, image_ids=Non
 
         # Convert results to COCO format
         # Cast masks to uint8 because COCO tools errors out on bool
-        image_results = build_coco_results(dataset, coco_image_ids[i:i + 1],
+        image_results = build_deepfashion_results(dataset, deepfashion_image_ids[i:i + 1],
                                            r["rois"], r["class_ids"],
                                            r["scores"],
                                            r["masks"].astype(np.uint8))
         results.extend(image_results)
 
     # Load results. This modifies results with additional attributes.
-    coco_results = coco.loadRes(results)
+    deepfashion_results = deepfashion.loadRes(results)
 
-    # Evaluate
-    cocoEval = COCOeval(coco, coco_results, eval_type)
-    cocoEval.params.imgIds = coco_image_ids
+    # Evaluate using cocoEval
+    cocoEval = COCOeval(deepfashion, deepfashion_results, eval_type)
+    cocoEval.params.imgIds = deepfashion_image_ids
     cocoEval.evaluate()
     cocoEval.accumulate()
     cocoEval.summarize()
@@ -452,20 +329,16 @@ if __name__ == '__main__':
 
     # Parse command line arguments
     parser = argparse.ArgumentParser(
-        description='Train Mask R-CNN on MS COCO.')
+        description='Train Mask R-CNN on DeepFashion2.')
     parser.add_argument("command",
                         metavar="<command>",
-                        help="'train' or 'evaluate' on MS COCO, 'deepfashiontrain on Deep Fashion2")
+                        help="'train' or 'evaluate' on Deepfashion")
     parser.add_argument('--dataset', required=True,
-                        metavar="/path/to/coco/",
-                        help='Directory of the MS-COCO dataset')
-    parser.add_argument('--year', required=False,
-                        default=DEFAULT_DATASET_YEAR,
-                        metavar="<year>",
-                        help='Year of the MS-COCO dataset (2014 or 2017) (default=2014)')
+                        metavar="/path/to/deepfashion2/",
+                        help='Directory of the Deepfashion2 dataset')
     parser.add_argument('--model', required=True,
                         metavar="/path/to/weights.h5",
-                        help="Path to weights .h5 file or 'coco'")
+                        help="Path to weights .h5 file or 'deepfashion' or 'last' to continue from last trained weights")
     parser.add_argument('--logs', required=False,
                         default=DEFAULT_LOGS_DIR,
                         metavar="/path/to/logs/",
@@ -474,25 +347,29 @@ if __name__ == '__main__':
                         default=500,
                         metavar="<image count>",
                         help='Images to use for evaluation (default=500)')
+    parser.add_argument('--usecachedannot', required=False,
+                        default=False,
+                        metavar="<True|False>",
+                        help='Automatically uses the cached COCO-style annotations if available (default=False)',
+                        type=bool)
     parser.add_argument('--download', required=False,
                         default=False,
                         metavar="<True|False>",
-                        help='Automatically download and unzip MS-COCO files (default=False)',
+                        help='Automatically download and unzip Deepfashion files (default=False)',
                         type=bool)
     args = parser.parse_args()
     print("Command: ", args.command)
     print("Model: ", args.model)
     print("Dataset: ", args.dataset)
-    print("Year: ", args.year)
     print("Logs: ", args.logs)
+    print("Use Cached COCO Annotations: ", args.usecachedannot)
     print("Auto Download: ", args.download)
 
-    """
     # Configurations
     if args.command == "train":
-        config = CocoConfig()
+        config = BluConfig()
     else:
-        class InferenceConfig(CocoConfig):
+        class InferenceConfig(BluConfig):
             # Set batch size to 1 since we'll be running inference on
             # one image at a time. Batch size = GPU_COUNT * IMAGES_PER_GPU
             GPU_COUNT = 1
@@ -510,8 +387,8 @@ if __name__ == '__main__':
                                   model_dir=args.logs)
 
     # Select weights file to load
-    if args.model.lower() == "coco":
-        model_path = COCO_MODEL_PATH
+    if args.model.lower() == "deepfashion":
+        model_path = DEEPFASHION_MODEL_PATH
     elif args.model.lower() == "last":
         # Find last trained weights
         model_path = model.find_last()
@@ -522,25 +399,23 @@ if __name__ == '__main__':
         model_path = args.model
 
     # Load weights
+    # If you wanna use COCO's pretrained weights, changing the NUM_CLASSES in BluConfig to Deepfashion no of classes causes issues
+    """
     print("Loading weights ", model_path)
     model.load_weights(model_path, by_name=True)
-
     """
 
     # Train or evaluate
     if args.command == "train":
         # Training dataset. Use the training set and 35K from the
         # validation set, as as in the Mask RCNN paper.
-        dataset_train = CocoDataset()
-        dataset_train.load_coco(args.dataset, "train", year=args.year, auto_download=args.download)
-        if args.year in '2014':
-            dataset_train.load_coco(args.dataset, "valminusminival", year=args.year, auto_download=args.download)
+        dataset_train = BluDataset()
+        dataset_train.load_deepfashion2(dataset_dir=args.dataset, subset='train', use_cached_coco_annot=args.usecachedannot, return_coco=True)
         dataset_train.prepare()
 
         # Validation dataset
-        dataset_val = CocoDataset()
-        val_type = "val" if args.year in '2017' else "minival"
-        dataset_val.load_coco(args.dataset, val_type, year=args.year, auto_download=args.download)
+        dataset_val = BluDataset()
+        dataset_val.load_deepfashion2(dataset_dir=args.dataset, subset='validation', use_cached_coco_annot=args.usecachedannot, return_coco=True)
         dataset_val.prepare()
 
         # Image Augmentation
@@ -577,23 +452,12 @@ if __name__ == '__main__':
 
     elif args.command == "evaluate":
         # Validation dataset
-        dataset_val = CocoDataset()
-        val_type = "val" if args.year in '2017' else "minival"
-        coco = dataset_val.load_coco(args.dataset, val_type, year=args.year, return_coco=True, auto_download=args.download)
+        dataset_val = BluDataset()
+        deepfashion = dataset_val.load_deepfashion2(dataset_dir=args.dataset, subset='validation', use_cached_coco_annot=args.usecachedannot, return_coco=True)
         dataset_val.prepare()
-        print("Running COCO evaluation on {} images.".format(args.limit))
-        evaluate_coco(model, dataset_val, coco, "bbox", limit=int(args.limit))
-    elif args.command == "deepfashiontrain":
-        print('**********************************************')
-        print('Training on Deepfashion data')
 
-        dataset_train = BluDataset()
-        coco = dataset_train.load_deepfashion2(dataset_dir=args.dataset, subset='validation', return_coco=True)
-        """
-        dataset_train.prepare()
-        print("Running DeepFashion evaluation on {} images.".format(args.limit))
-        evaluate_coco(model, dataset_train, coco, "bbox", limit=int(args.limit))
-        """
+        print("Running Deepfashion evaluation on {} images.".format(args.limit))
+        evaluate_deepfashion(model, dataset_val, deepfashion, "bbox", limit=int(args.limit))
     else:
         print("'{}' is not recognized. "
               "Use 'train' or 'evaluate'".format(args.command))
