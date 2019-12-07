@@ -92,6 +92,43 @@ class CocoConfig(Config):
 ############################################################
 
 class CocoDataset(utils.Dataset):
+    def load_deepfashion2(self, dataset_dir, subset):
+        """Load deepfashion2 data
+        """
+
+        # First transform the annotations from deepfashion to COCO format and drop it in a file
+        coco_annot = {
+            "info": {
+                "description": "DeepFashion Dataset",
+                "url": "https://bluprint.shop",
+                "version": "2.0",
+                "year": 2017,
+                "contributor": "DeepFashion",
+                "date_created": "2019/12/01"
+            },
+            "licenses": [
+                {
+                    "url": "http://creativecommons.org/licenses/by-nc-sa/2.0/",
+                    "id": 1,
+                    "name": "Attribution-NonCommercial-ShareAlike License"
+                },
+                {
+                    "url": "http://creativecommons.org/licenses/by-nc/2.0/",
+                    "id": 2,
+                    "name": "Attribution-NonCommercial License"
+                }
+            ],
+            "categories": [
+
+            ]
+        }
+
+        return coco_annot
+
+        # Then initialize COCO with the coco-style annotation file
+
+
+
     def load_coco(self, dataset_dir, subset, year=DEFAULT_DATASET_YEAR, class_ids=None,
                   class_map=None, return_coco=False, auto_download=False):
         """Load a subset of the COCO dataset.
@@ -404,7 +441,7 @@ if __name__ == '__main__':
         description='Train Mask R-CNN on MS COCO.')
     parser.add_argument("command",
                         metavar="<command>",
-                        help="'train' or 'evaluate' on MS COCO")
+                        help="'train' or 'evaluate' on MS COCO, 'deepfashiontrain on Deep Fashion2")
     parser.add_argument('--dataset', required=True,
                         metavar="/path/to/coco/",
                         help='Directory of the MS-COCO dataset')
@@ -436,6 +473,7 @@ if __name__ == '__main__':
     print("Logs: ", args.logs)
     print("Auto Download: ", args.download)
 
+    """
     # Configurations
     if args.command == "train":
         config = CocoConfig()
@@ -472,6 +510,8 @@ if __name__ == '__main__':
     # Load weights
     print("Loading weights ", model_path)
     model.load_weights(model_path, by_name=True)
+
+    """
 
     # Train or evaluate
     if args.command == "train":
@@ -529,6 +569,13 @@ if __name__ == '__main__':
         dataset_val.prepare()
         print("Running COCO evaluation on {} images.".format(args.limit))
         evaluate_coco(model, dataset_val, coco, "bbox", limit=int(args.limit))
+    elif args.command == "deepfashiontrain":
+        print('**********************************************')
+        print('Training on Deepfashion data')
+
+        dataset_train = CocoDataset()
+        response = dataset_train.load_deepfashion2(args.dataset, 'validation')
+        print(response)
     else:
         print("'{}' is not recognized. "
               "Use 'train' or 'evaluate'".format(args.command))
