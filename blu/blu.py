@@ -107,7 +107,7 @@ class BluDataset(utils.Dataset):
         return_coco: If True, returns the COCO-style object.
         """
 
-        temp_json_annotations_output = "temp/deepfashion_{subset}_annotations.json".format(subset)
+        temp_json_annotations_output = "temp/deepfashion_{}_annotations.json".format(subset)
         
         if use_cached_coco_annot and os.path.isfile(temp_json_annotations_output):
             pass
