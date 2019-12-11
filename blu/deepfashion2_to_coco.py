@@ -266,6 +266,10 @@ def convert_deepfashion2_annotations_to_coco_format(dataset_dir: str, subset: st
 
 
 
+        # Create directories if missing in the file path
+        if not os.path.exists(os.path.dirname(output_json_path)):
+            os.makedirs(os.path.dirname(output_json_path))
+
         # Dump this giant constructed json blob to a file
         with open(output_json_path, 'w+', encoding='utf-8') as f:
             json.dump(dataset, f, ensure_ascii=False, indent=4)

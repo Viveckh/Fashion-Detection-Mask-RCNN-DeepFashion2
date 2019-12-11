@@ -62,7 +62,7 @@ from deepfashion2_to_coco import convert_deepfashion2_annotations_to_coco_format
 
 # Path to trained weights file
 # Update the default model path
-DEEPFASHION_MODEL_PATH = os.path.join(ROOT_DIR, "mask_rcnn_coco.h5")
+DEEPFASHION_MODEL_PATH = os.path.join(ROOT_DIR, "mask_rcnn_deepfashion2.h5")
 
 # Directory to save logs and model checkpoints, if not provided
 # through the command line argument --logs
