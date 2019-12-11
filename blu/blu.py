@@ -13,6 +13,9 @@ python3 blu.py train --dataset "/CodeForLyf/_Datasets/deepfashion2" --model "/Co
 Usage: import the module (see Jupyter notebooks for examples), or run from
        the command line as such:
 
+    # Train a new model starting from scratch using deepfashion dataset
+    python3 blu.py train --dataset "</path/to/deepfashion>" --model "deepfashion" --usecachedannot false --limit 10
+
     # Train a new model starting from pre-trained COCO weights
     python3 coco.py train --dataset=/path/to/coco/ --model=coco
 
