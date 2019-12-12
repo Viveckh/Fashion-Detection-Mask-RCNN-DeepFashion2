@@ -17,7 +17,7 @@ Usage: import the module (see Jupyter notebooks for examples), or run from
     python3 blu.py train --dataset "</path/to/deepfashion>" --model "deepfashion" --usecachedannot false --limit 10
 
     # Train a new model starting from pre-trained COCO weights
-    python3 coco.py train --dataset=/path/to/coco/ --model=coco
+    python3 blu.py train --dataset "</path/to/deepfashion>" --model "coco" --usecachedannot false --limit 10
 
     # Train a new model starting from ImageNet weights. Also auto download COCO dataset
     python3 coco.py train --dataset=/path/to/coco/ --model=imagenet --download=True
@@ -65,6 +65,7 @@ from deepfashion2_to_coco import convert_deepfashion2_annotations_to_coco_format
 
 # Path to trained weights file
 # Update the default model path
+COCO_MODEL_PATH = os.path.join(ROOT_DIR, "mask_rcnn_coco.h5")
 DEEPFASHION_MODEL_PATH = os.path.join(ROOT_DIR, "mask_rcnn_deepfashion2.h5")
 
 # Directory to save logs and model checkpoints, if not provided
@@ -94,7 +95,7 @@ class BluConfig(Config):
     # GPU_COUNT = 8
 
     # Number of classes (including background)
-    # Changing the following from COCO's 80 classes makes models trained on COCO unusable, due to dimension issues
+    # Changing the following from COCO's 80 classes makes models trained on COCO unusable unless you ignore last layer of NN while loading weights
     NUM_CLASSES = 1 + 13  # The Deepfashion2 dataset being currently used has 13 classes
 
 
@@ -341,7 +342,7 @@ if __name__ == '__main__':
                         help='Directory of the Deepfashion2 dataset')
     parser.add_argument('--model', required=True,
                         metavar="/path/to/weights.h5",
-                        help="Path to weights .h5 file or 'deepfashion' or 'last' to continue from last trained weights")
+                        help="Path to weights .h5 file or 'coco', 'deepfashion' or 'last' to continue from last trained weights")
     parser.add_argument('--logs', required=False,
                         default=DEFAULT_LOGS_DIR,
                         metavar="/path/to/logs/",
@@ -390,7 +391,9 @@ if __name__ == '__main__':
                                   model_dir=args.logs)
 
     # Select weights file to load
-    if args.model.lower() == "deepfashion":
+    if args.model.lower() == "coco":
+        model_path = COCO_MODEL_PATH
+    elif args.model.lower() == "deepfashion":
         model_path = DEEPFASHION_MODEL_PATH
     elif args.model.lower() == "last":
         # Find last trained weights
@@ -403,10 +406,15 @@ if __name__ == '__main__':
 
     # Load weights
     # If you wanna use COCO's pretrained weights, changing the NUM_CLASSES in BluConfig to Deepfashion no of classes causes issues
-    """
     print("Loading weights ", model_path)
-    model.load_weights(model_path, by_name=True)
-    """
+    if args.model.lower() == "coco":
+        # Exclude the last layers because they require a matching
+        # number of classes. Without this, the changes in config will raise errors during training 
+        model.load_weights(model_path, by_name=True, exclude=[
+            "mrcnn_class_logits", "mrcnn_bbox_fc",
+            "mrcnn_bbox", "mrcnn_mask"])
+    else:
+        model.load_weights(model_path, by_name=True)
 
     # Train or evaluate
     if args.command == "train":
