@@ -240,6 +240,56 @@ class BluDataset(utils.Dataset):
         m = maskUtils.decode(rle)
         return m
 
+
+############################################################
+#  Deepfashion Training
+############################################################
+
+def train(model, config, dataset_dir: str, use_cached_coco_annot: bool):
+    # Training dataset.
+    dataset_train = BluDataset()
+    dataset_train.load_deepfashion2(dataset_dir=dataset_dir, subset='train', use_cached_coco_annot=use_cached_coco_annot, return_coco=True)
+    dataset_train.prepare()
+
+    # Validation dataset
+    dataset_val = BluDataset()
+    dataset_val.load_deepfashion2(dataset_dir=dataset_dir, subset='validation', use_cached_coco_annot=use_cached_coco_annot, return_coco=True)
+    dataset_val.prepare()
+
+    # Image Augmentation
+    # Right/Left flip 50% of the time
+    augmentation = imgaug.augmenters.Fliplr(0.5)
+
+    # Training - Stage 1
+    # Only training the network heads since the initial training will be on top of coco pretrained model
+    # TODO: Update this to handle case where you're training from scratch
+    print("Training network heads")
+    model.train(dataset_train, dataset_val,
+                learning_rate=config.LEARNING_RATE,
+                epochs=40,
+                layers='heads',
+                augmentation=augmentation)
+
+    """
+    # Training - Stage 2
+    # Finetune layers from ResNet stage 4 and up
+    print("Fine tune Resnet stage 4 and up")
+    model.train(dataset_train, dataset_val,
+                learning_rate=config.LEARNING_RATE,
+                epochs=120,
+                layers='4+',
+                augmentation=augmentation)
+
+    # Training - Stage 3
+    # Fine tune all layers
+    print("Fine tune all layers")
+    model.train(dataset_train, dataset_val,
+                learning_rate=config.LEARNING_RATE / 10,
+                epochs=160,
+                layers='all',
+                augmentation=augmentation)
+    """
+
 ############################################################
 #  Deepfashion Evaluation
 ############################################################
@@ -324,7 +374,7 @@ def evaluate_deepfashion(model, dataset, deepfashion, eval_type="bbox", limit=0,
 
 
 ############################################################
-#  Training
+#  Entry point
 ############################################################
 
 
@@ -418,48 +468,7 @@ if __name__ == '__main__':
 
     # Train or evaluate
     if args.command == "train":
-        # Training dataset. Use the training set and 35K from the
-        # validation set, as as in the Mask RCNN paper.
-        dataset_train = BluDataset()
-        dataset_train.load_deepfashion2(dataset_dir=args.dataset, subset='train', use_cached_coco_annot=args.usecachedannot, return_coco=True)
-        dataset_train.prepare()
-
-        # Validation dataset
-        dataset_val = BluDataset()
-        dataset_val.load_deepfashion2(dataset_dir=args.dataset, subset='validation', use_cached_coco_annot=args.usecachedannot, return_coco=True)
-        dataset_val.prepare()
-
-        # Image Augmentation
-        # Right/Left flip 50% of the time
-        augmentation = imgaug.augmenters.Fliplr(0.5)
-
-        # *** This training schedule is an example. Update to your needs ***
-
-        # Training - Stage 1
-        print("Training network heads")
-        model.train(dataset_train, dataset_val,
-                    learning_rate=config.LEARNING_RATE,
-                    epochs=40,
-                    layers='heads',
-                    augmentation=augmentation)
-
-        # Training - Stage 2
-        # Finetune layers from ResNet stage 4 and up
-        print("Fine tune Resnet stage 4 and up")
-        model.train(dataset_train, dataset_val,
-                    learning_rate=config.LEARNING_RATE,
-                    epochs=120,
-                    layers='4+',
-                    augmentation=augmentation)
-
-        # Training - Stage 3
-        # Fine tune all layers
-        print("Fine tune all layers")
-        model.train(dataset_train, dataset_val,
-                    learning_rate=config.LEARNING_RATE / 10,
-                    epochs=160,
-                    layers='all',
-                    augmentation=augmentation)
+        train(model=model, config=config, dataset_dir=args.dataset, use_cached_coco_annot=args.usecachedannot)
 
     elif args.command == "evaluate":
         # Validation dataset
