@@ -1,28 +1,55 @@
+### BLU Image Instance Segmentation Model Training
+
+## Author: [(EJ) Vivek Pandey](https://viveckh.com)
+
 ### MASK RCNN SETUP
 
+* If you're launching an EC2 instance, start with `g4dn.xlarge` - about $0.5 an hour at the time of writing this.
+* Also use an Ubuntu deep learning instance, since I had some cython issues while building pycocotools in the Amazon Linux instance.
 * Clone the Mask_RCNN repo
+* Install virtualenv if you dont have it: `pip3 install --user virtualenv`
 * Create virtualenv: `virtualenv -p python3 venv`
 * Activate the environment
 * Install the following specific versions for tensorflow and keras, cause the ones in requirements.txt raises error due to deprecated functions in newer versions
 * `pip3 install tensorflow==1.13.1 keras==2.1.0`
 * Install other requirements `pip3 install -r requirements.txt`
 * Run MASK RCNN Setup: `python3 setup.py install`
-* Download the mask_rcnn_coco.h5 pretrained weights from [here](https://github.com/matterport/Mask_RCNN/releases) and drop in the root of project
+* Download the mask_rcnn_coco.h5 pretrained weights from [here](https://github.com/matterport/Mask_RCNN/releases) and drop in the root of project. Or you can `scp` it from your local if you're on cloud
 
 ### COCO SETUP
-* Leave the virtualenv active and clone [this](https://github.com/waleedka/coco) repo separately
+* Leave the virtualenv active and clone [this](https://github.com/waleedka/coco) repo in a separate folder
 * Go to the PythonAPI folder and run the following
 * `easy_install cython` only if you get cython error
 * `make`
 * `python setup.py install`
-* This will install pycoco to the virtualenv
+* This will install pycocotools to the virtualenv. Verify by running a `pip freeze`
 
-### Testing the setup: Running Coco evaluation in samples
+### Optional: Testing the setup: Running Coco evaluation in samples
 
 The following assumes you have already downloaded the 2017 validation image and annotation sets into the `/CodeForLyf/_Datasets/coco` folder.
 
 `python3 coco.py evaluate --dataset "/CodeForLyf/_Datasets/coco" --year 2017 --model "/CodeForLyf/Mask_RCNN/mask_rcnn_coco.h5" --limit 10`
 
+### Optional: Blu Model Training by starting from coco pretrained model if on AWS
+Navigate to the folder with `blu.py`
+
+`python3 blu.py train --dataset "s3://deepfashion2" --model "coco" --usecachedannot false --limit 10`
+
+Remove the limit of 10 once you verify it runs
+
+# Quirks on AWS
+
+### If you get an `AssertionError` that says something along the lines of keras backend not finding a match from {'tensorflow', 'theano' and 'cntk'}
+
+`vi ~/.keras/keras.json`
+
+And update the backend to tensorflow, since the default might be set to MXNET.
+
+### If you get an error pertaining to the channel dimensions of the inputs not being defined
+
+`vi ~/.keras/keras.json`
+
+Update the `image_data_format` to `channels_first`. Since we are attempting to use pretrained weights, it should be loaded from there.
 
 ### Detection Response
 The detection returns the following dict for each image.
